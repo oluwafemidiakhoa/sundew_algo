@@ -1,0 +1,339 @@
+
+#!/usr/bin/env python3
+"""
+Sundew Algorithm — Refined
+Bio‑Inspired Event‑Driven Intelligence for resource‑constrained AI systems.
+
+Highlights vs. baseline:
+- Hard/soft gating with temperature (anneal to hard at inference)
+- Principled, convex significance blend with configurable weights
+- PI‑style adaptive threshold using EMA activation rate + energy pressure
+- Clear energy model + metrics, deterministic RNG
+- Simple CLI demo (`python sundew_algorithm_refined.py --demo`)
+
+Author: Oluwafemi Idiakhoa (with refinement help)
+License: MIT
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import math
+import random
+import time
+from dataclasses import dataclass, field, asdict
+from typing import Dict, List, Optional, Tuple
+from datetime import datetime
+
+
+# ---------- Utilities ----------
+
+def clamp(x: float, lo: float, hi: float) -> float:
+    return max(lo, min(hi, x))
+
+
+# ---------- Data structures ----------
+
+@dataclass
+class ProcessingResult:
+    """Result of deep processing phase."""
+    input_data: Dict
+    significance: float
+    insights: str
+    processing_time: float
+    energy_consumed: float
+    activated: bool
+    timestamp: str
+
+
+@dataclass
+class SundewConfig:
+    # Activation & adaptation
+    activation_threshold: float = 0.7
+    target_activation_rate: float = 0.25         # desired fraction of events processed
+    ema_alpha: float = 0.1                        # smoothing for activation-rate estimate
+    adapt_lr: float = 0.02                        # step size for threshold updates
+    energy_pressure: float = 0.15                 # how strongly low energy raises the threshold
+    min_threshold: float = 0.3
+    max_threshold: float = 0.95
+    gate_temperature: float = 0.0                 # 0.0 => hard gate; >0 => soft (sigmoid width)
+
+    # Energy model
+    max_energy: float = 100.0
+    dormant_tick_cost: float = 0.5                # cost to remain alert each event
+    dormancy_regen: Tuple[float, float] = (1.0, 3.0)
+    eval_cost: float = 0.6                        # cost of lightweight evaluation per event
+    base_processing_cost: float = 10.0            # base deep-processing cost before scaling
+
+    # Significance model (convex combination; must sum to 1.0)
+    w_magnitude: float = 0.30
+    w_anomaly: float = 0.40
+    w_context: float = 0.20
+    w_urgency: float = 0.10
+
+    # Simulation / demo
+    rng_seed: int = 42
+
+
+@dataclass
+class SundewMetrics:
+    total_inputs: int = 0
+    activations: int = 0
+    total_processing_time: float = 0.0
+    total_energy_spent: float = 0.0
+    ema_activation_rate: float = 0.0
+
+    def as_dict(self) -> Dict:
+        return {
+            "total_inputs": self.total_inputs,
+            "activations": self.activations,
+            "activation_rate": (self.activations / self.total_inputs) if self.total_inputs else 0.0,
+            "ema_activation_rate": self.ema_activation_rate,
+            "avg_processing_time": (self.total_processing_time / max(1, self.activations)),
+            "total_energy_spent": self.total_energy_spent,
+        }
+
+
+# ---------- Core algorithm ----------
+
+class SundewAlgorithm:
+    """Bio‑inspired selective activation for AI systems."""
+
+    def __init__(self, config: SundewConfig = SundewConfig()):
+        self.cfg = config
+        self.threshold = self.cfg.activation_threshold
+        self.energy = self.cfg.max_energy
+        self.state = "dormant"
+        self.metrics = SundewMetrics()
+        self.history: List[ProcessingResult] = []
+
+        random.seed(self.cfg.rng_seed)
+
+        # Validate significance weights
+        s = self.cfg.w_magnitude + self.cfg.w_anomaly + self.cfg.w_context + self.cfg.w_urgency
+        if not math.isclose(s, 1.0, rel_tol=1e-6):
+            raise ValueError(f"Significance weights must sum to 1.0, got {s:.3f}")
+
+    # ----- Significance & gating -----
+
+    def evaluate_significance(self, x: Dict) -> float:
+        """Lightweight significance in [0, 1]."""
+        mag = clamp(float(x.get("magnitude", 0.0)) / 100.0, 0.0, 1.0)
+        ano = clamp(float(x.get("anomaly_score", 0.0)), 0.0, 1.0)
+        ctx = clamp(float(x.get("context_relevance", 0.0)), 0.0, 1.0)
+        urg = clamp(float(x.get("urgency", 0.0)), 0.0, 1.0)
+
+        sig = (self.cfg.w_magnitude * mag +
+               self.cfg.w_anomaly * ano +
+               self.cfg.w_context * ctx +
+               self.cfg.w_urgency * urg)
+
+        # Mild noise to reflect real‑world uncertainty
+        sig += random.uniform(-0.03, 0.03)
+        return clamp(sig, 0.0, 1.0)
+
+    def _gate_probability(self, sig: float) -> float:
+        if self.cfg.gate_temperature <= 0.0:
+            return 1.0 if sig >= self.threshold else 0.0
+        # soft: logistic centered at threshold
+        t = max(1e-6, self.cfg.gate_temperature)
+        z = (sig - self.threshold) / t
+        return 1.0 / (1.0 + math.exp(-z))
+
+    def _decide_activation(self, sig: float) -> bool:
+        p = self._gate_probability(sig)
+        return random.random() < p
+
+    # ----- Energy model helpers -----
+
+    def _spend(self, amount: float) -> None:
+        self.energy = clamp(self.energy - amount, 0.0, self.cfg.max_energy)
+        self.metrics.total_energy_spent += amount
+
+    def _dormancy_tick(self) -> None:
+        # regen while paying a small alertness cost
+        regen = random.uniform(*self.cfg.dormancy_regen)
+        self.energy = clamp(self.energy + regen - self.cfg.dormant_tick_cost, 0.0, self.cfg.max_energy)
+
+    # ----- Adaptation -----
+
+    def _adapt_threshold(self) -> None:
+        """PI‑style control toward target activation rate with energy pressure."""
+        target = self.cfg.target_activation_rate
+        ema = self.metrics.ema_activation_rate
+        error = target - ema  # if we activate *too often*, ema>target -> error<0 -> threshold increases
+        # Energy pressure: low energy should raise the threshold
+        energy_frac = self.energy / self.cfg.max_energy
+        pressure = (1.0 - energy_frac) * self.cfg.energy_pressure
+
+        self.threshold += self.cfg.adapt_lr * error + pressure
+        self.threshold = clamp(self.threshold, self.cfg.min_threshold, self.cfg.max_threshold)
+
+    # ----- Processing pipeline -----
+
+    def _deep_process(self, x: Dict, sig: float) -> Tuple[str, float, float]:
+        start = time.time()
+
+        # Energy cost scales with significance (more important -> deeper work)
+        complexity_mult = 1.0 + 1.5 * sig
+        energy_cost = self.cfg.base_processing_cost * complexity_mult
+        self._spend(energy_cost)
+
+        # Simulated compute latency (kept small for demo)
+        delay = 0.05 + 0.25 * sig
+        time.sleep(delay)
+
+        # Simple, interpretable insight
+        band = "CRITICAL" if sig >= 0.9 else ("HIGH" if sig >= 0.7 else "MODERATE")
+        insight = f"Deep analysis of {x.get('type','unknown')} (mag={x.get('magnitude',0):.1f}) — {band} ({sig:.3f})"
+
+        return insight, energy_cost, time.time() - start
+
+    def process(self, x: Dict) -> Optional[ProcessingResult]:
+        self.metrics.total_inputs += 1
+        self.state = "evaluating"
+
+        # Lightweight eval cost
+        self._spend(self.cfg.eval_cost)
+
+        sig = self.evaluate_significance(x)
+
+        activate = self._decide_activation(sig)
+        # Update EMA activation rate
+        alpha = self.cfg.ema_alpha
+        self.metrics.ema_activation_rate = (1 - alpha) * self.metrics.ema_activation_rate + alpha * (1.0 if activate else 0.0)
+
+        if not activate:
+            self.state = "dormant"
+            self._dormancy_tick()
+            # Also adapt threshold even on non-activations to keep control responsive
+            self._adapt_threshold()
+            return None
+
+        # Activation path
+        self.state = "processing"
+        insight, energy_spent, proc_time = self._deep_process(x, sig)
+        self.metrics.activations += 1
+        self.metrics.total_processing_time += proc_time
+
+        result = ProcessingResult(
+            input_data=x,
+            significance=sig,
+            insights=insight,
+            processing_time=proc_time,
+            energy_consumed=energy_spent + self.cfg.eval_cost,
+            activated=True,
+            timestamp=datetime.utcnow().isoformat()
+        )
+        self.history.append(result)
+
+        # After processing, adapt and return to dormancy
+        self._adapt_threshold()
+        self.state = "dormant"
+        return result
+
+    # ----- Reporting -----
+
+    def report(self, assumed_baseline_per_event: float = 15.0) -> Dict:
+        """Return human‑friendly metrics and comparisons.
+        assumed_baseline_per_event: energy units a non‑selective system would spend per event.
+        """
+        m = self.metrics.as_dict()
+        m.update({
+            "energy_remaining": self.energy,
+            "threshold": self.threshold,
+        })
+        # Baseline vs. actual
+        baseline_cost = self.metrics.total_inputs * assumed_baseline_per_event
+        actual_cost = self.metrics.total_energy_spent
+        savings = (baseline_cost - actual_cost) / max(1e-9, baseline_cost)
+        m.update({
+            "baseline_energy_cost": baseline_cost,
+            "actual_energy_cost": actual_cost,
+            "estimated_energy_savings_pct": 100.0 * clamp(savings, -1.0, 1.0),
+        })
+        return m
+
+
+# ---------- Demo / CLI ----------
+
+EVENT_TYPES = [
+    {"type": "environmental", "anomaly_bias": (0.0, 0.4), "urgency_bias": (0.1, 0.6)},
+    {"type": "security", "anomaly_bias": (0.4, 0.9), "urgency_bias": (0.3, 0.8)},
+    {"type": "health_monitor", "anomaly_bias": (0.2, 0.7), "urgency_bias": (0.2, 0.7)},
+    {"type": "system_alert", "anomaly_bias": (0.3, 0.8), "urgency_bias": (0.2, 0.9)},
+    {"type": "emergency", "anomaly_bias": (0.8, 1.0), "urgency_bias": (0.9, 1.0)},
+]
+
+
+def synth_event(i: int) -> Dict:
+    kind = random.choice(EVENT_TYPES)
+    return {
+        "id": f"event_{i:05d}",
+        "type": kind["type"],
+        "magnitude": random.uniform(0, 100),
+        "anomaly_score": random.uniform(*kind["anomaly_bias"]),
+        "context_relevance": random.uniform(0, 1),
+        "urgency": random.uniform(*kind["urgency_bias"]),
+        "timestamp": time.time(),
+    }
+
+
+def run_demo(n_events: int = 40, temperature: float = 0.1) -> Dict:
+    cfg = SundewConfig(gate_temperature=temperature)
+    algo = SundewAlgorithm(cfg)
+
+    processed: List[ProcessingResult] = []
+
+    print("🌿 Sundew Algorithm — Refined Demo")
+    print("=" * 60)
+    print(f"Initial threshold: {algo.threshold:.3f} | Energy: {algo.energy:.1f}\n")
+
+    for i in range(n_events):
+        x = synth_event(i)
+        res = algo.process(x)
+        if res is None:
+            print(f"{i+1:02d}. {x['type']:<15} ⏸ dormant | energy {algo.energy:6.1f} | thr {algo.threshold:.3f}")
+        else:
+            processed.append(res)
+            print(f"{i+1:02d}. {x['type']:<15} ✅ processed (sig={res.significance:.3f}, "
+                  f"{res.processing_time:.3f}s, ΔE≈{res.energy_consumed:.1f}) | energy {algo.energy:6.1f} | thr {algo.threshold:.3f}")
+
+    print("\n🏁 Final Report")
+    report = algo.report()
+    for k, v in report.items():
+        if isinstance(v, float):
+            if "pct" in k:
+                print(f"  {k:30s}: {v:7.2f}%")
+            else:
+                print(f"  {k:30s}: {v:10.3f}")
+        else:
+            print(f"  {k:30s}: {v}")
+    return {
+        "config": asdict(cfg),
+        "report": report,
+        "processed_events": [asdict(r) for r in processed],
+        "generated_at": datetime.utcnow().isoformat(),
+    }
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Sundew Algorithm (refined)")
+    parser.add_argument("--demo", action="store_true", help="Run the interactive demo")
+    parser.add_argument("--events", type=int, default=40, help="Number of demo events")
+    parser.add_argument("--temperature", type=float, default=0.1, help="Gating temperature (0=hard)")
+    parser.add_argument("--save", type=str, default="sundew_refined_results.json", help="Save demo results to JSON")
+    args = parser.parse_args()
+
+    if args.demo:
+        out = run_demo(args.events, args.temperature)
+        with open(args.save, "w") as f:
+            json.dump(out, f, indent=2)
+        print(f"\n💾 Results saved to {args.save}")
+    else:
+        parser.print_help()
+
+
+if __name__ == "__main__":
+    main()
