@@ -1,0 +1,55 @@
+[project]
+name = "sundew"
+version = "0.1.1"
+description = "Sundew Algorithm: bio-inspired, event-driven intelligence for resource-constrained AI."
+readme = "README.md"
+license = { file = "LICENSE" }
+authors = [{ name = "Oluwafemi Idiakhoa", email = "oluwafemi@gmail.com" }]
+requires-python = ">=3.9"
+# Core runtime deps (keep empty for now; add as you integrate more)
+dependencies = []
+
+# Optional extras for dev and benchmarks
+[project.optional-dependencies]
+dev = [
+  "pytest>=7.0",
+  "matplotlib>=3.7",
+  "black>=24.3.0",
+  "isort>=5.13.0",
+  "flake8>=7.0.0",
+  "pre-commit>=3.5.0"
+]
+
+[project.urls]
+Homepage = "https://github.com/oluwafemidiakhoa/sundew-algorithm"
+Issues   = "https://github.com/oluwafemidiakhoa/sundew-algorithm/issues"
+
+[project.scripts]
+sundew = "sundew.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["sundew*"]
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]
+
+[tool.black]
+line-length = 100
+target-version = ["py39", "py310", "py311"]
+
+[tool.isort]
+profile = "black"
+line_length = 100
+
+[tool.flake8]
+max-line-length = 100
+extend-ignore = ["E203", "W503"]
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"

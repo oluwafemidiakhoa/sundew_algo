@@ -1,0 +1,109 @@
+{
+  "config": {
+    "activation_threshold": 0.7,
+    "target_activation_rate": 0.25,
+    "ema_alpha": 0.1,
+    "adapt_lr": 0.02,
+    "energy_pressure": 0.15,
+    "min_threshold": 0.3,
+    "max_threshold": 0.95,
+    "gate_temperature": 0.1,
+    "max_energy": 100.0,
+    "dormant_tick_cost": 0.5,
+    "dormancy_regen": [
+      1.0,
+      3.0
+    ],
+    "eval_cost": 0.6,
+    "base_processing_cost": 10.0,
+    "w_magnitude": 0.3,
+    "w_anomaly": 0.4,
+    "w_context": 0.2,
+    "w_urgency": 0.1,
+    "rng_seed": 42
+  },
+  "report": {
+    "total_inputs": 40,
+    "activations": 4,
+    "activation_rate": 0.1,
+    "ema_activation_rate": 0.2018534367626483,
+    "avg_processing_time": 0.20851165056228638,
+    "total_energy_spent": 98.95490464630558,
+    "energy_remaining": 40.0413767568314,
+    "threshold": 0.95,
+    "baseline_energy_cost": 600.0,
+    "actual_energy_cost": 98.95490464630558,
+    "estimated_energy_savings_pct": 83.5075158922824
+  },
+  "processed_events": [
+    {
+      "input_data": {
+        "id": "event_00015",
+        "type": "security",
+        "magnitude": 15.28392685496348,
+        "anomaly_score": 0.7812554000375757,
+        "context_relevance": 0.5393790301196257,
+        "urgency": 0.6893132393152791,
+        "timestamp": 1756742350.3303483
+      },
+      "significance": 0.5369822908670844,
+      "insights": "Deep analysis of security (mag=15.3) \u2014 MODERATE (0.537)",
+      "processing_time": 0.19841384887695312,
+      "energy_consumed": 18.654734363006266,
+      "activated": true,
+      "timestamp": "2025-09-01T15:59:10.528762"
+    },
+    {
+      "input_data": {
+        "id": "event_00025",
+        "type": "system_alert",
+        "magnitude": 80.80222447317026,
+        "anomaly_score": 0.7279834462341863,
+        "context_relevance": 0.09790872820160035,
+        "urgency": 0.6565014257989654,
+        "timestamp": 1756742350.5302997
+      },
+      "significance": 0.6212672164194203,
+      "insights": "Deep analysis of system_alert (mag=80.8) \u2014 MODERATE (0.621)",
+      "processing_time": 0.2165985107421875,
+      "energy_consumed": 19.919008246291305,
+      "activated": true,
+      "timestamp": "2025-09-01T15:59:10.746898"
+    },
+    {
+      "input_data": {
+        "id": "event_00037",
+        "type": "health_monitor",
+        "magnitude": 90.53364910793232,
+        "anomaly_score": 0.6230518566474277,
+        "context_relevance": 0.09229846771273342,
+        "urgency": 0.41178788628186314,
+        "timestamp": 1756742350.7478964
+      },
+      "significance": 0.5670609855918362,
+      "insights": "Deep analysis of health_monitor (mag=90.5) \u2014 MODERATE (0.567)",
+      "processing_time": 0.20244908332824707,
+      "energy_consumed": 19.105914783877544,
+      "activated": true,
+      "timestamp": "2025-09-01T15:59:10.950345"
+    },
+    {
+      "input_data": {
+        "id": "event_00038",
+        "type": "security",
+        "magnitude": 63.71133773013796,
+        "anomaly_score": 0.5309776312171741,
+        "context_relevance": 0.7412309083479308,
+        "urgency": 0.5758402105631957,
+        "timestamp": 1756742350.9503455
+      },
+      "significance": 0.60501648354203,
+      "insights": "Deep analysis of security (mag=63.7) \u2014 MODERATE (0.605)",
+      "processing_time": 0.2165851593017578,
+      "energy_consumed": 19.67524725313045,
+      "activated": true,
+      "timestamp": "2025-09-01T15:59:11.166930"
+    }
+  ],
+  "generated_at": "2025-09-01T15:59:11.168311"
+}

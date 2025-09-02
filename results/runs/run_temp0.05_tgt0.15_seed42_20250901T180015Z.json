@@ -1,0 +1,16 @@
+{
+  "total_inputs": 300,
+  "activations": 13,
+  "activation_rate": 0.043333333333333335,
+  "ema_activation_rate": 0.011129457887259582,
+  "avg_processing_time": 0.24234755222613996,
+  "total_energy_spent": 452.86220390723724,
+  "energy_remaining": 69.47151847840604,
+  "threshold": 0.9,
+  "baseline_energy_cost": 4500.0,
+  "actual_energy_cost": 452.86220390723724,
+  "estimated_energy_savings_pct": 89.93639546872807,
+  "temperature": 0.05,
+  "target_activation_rate": 0.15,
+  "seed": 42
+}
