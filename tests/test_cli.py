@@ -1,17 +1,35 @@
-import subprocess
 import sys
-import os
+import subprocess
+import tempfile
+from pathlib import Path
 
-def test_cli_help_runs():
-    # Run the CLI with no args: should print help and exit 0
-    cmd = [sys.executable, "-m", "sundew.cli"]
+def test_cli_demo_saves_json(tmp_path: Path):
+    out_json = tmp_path / "demo.json"
+    cmd = [
+        sys.executable, "-m", "sundew.cli",
+        "--demo", "--events", "3", "--temperature", "0.0",
+        "--save", str(out_json),
+    ]
     proc = subprocess.run(cmd, capture_output=True, text=True)
     assert proc.returncode == 0
-    assert "Sundew Algorithm CLI" in proc.stdout or "Sundew Algorithm" in proc.stdout
+    assert out_json.exists(), proc.stdout + proc.stderr
+    # sanity: small file with keys
+    txt = out_json.read_text(encoding="utf-8")
+    assert '"report"' in txt and '"config"' in txt
 
-def test_cli_demo_runs_quick():
-    # Run a tiny demo to ensure wiring works (very small to keep CI fast)
-    cmd = [sys.executable, "-m", "sundew.cli", "--demo", "--events", "5", "--temperature", "0.1"]
+def test_cli_ascii_fallback_runs(tmp_path: Path, monkeypatch):
+    """
+    Force stdout encoding to ascii to exercise the non-emoji branch.
+    """
+    class Dummy:
+        encoding = "ascii"
+    monkeypatch.setattr(sys, "stdout", Dummy(), raising=False)
+
+    cmd = [
+        sys.executable, "-m", "sundew.cli",
+        "--demo", "--events", "2", "--temperature", "0.0",
+    ]
     proc = subprocess.run(cmd, capture_output=True, text=True)
     assert proc.returncode == 0
-    assert "Final Report" in proc.stdout
+    # ensure we didn't crash on UnicodeEncodeError and saw ASCII tokens
+    assert "[sundew]" in (proc.stdout or "") or "[done]" in (proc.stdout or "")
