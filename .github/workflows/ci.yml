@@ -1,14 +1,55 @@
 name: CI
+
 on:
   push:
+    branches: [ main ]
   pull_request:
+    branches: [ main ]
+
 jobs:
-  test:
+  build:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.8", "3.9", "3.10", "3.11"]
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with: { python-version: "3.10" }
-      - run: python -m pip install --upgrade pip
-      - run: pip install -e ".[test]" pytest
-      - run: pytest
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+          pip install pytest pytest-cov flake8
+
+      - name: Lint with flake8
+        run: |
+          # stop build if there are Python syntax errors or undefined names
+          flake8 src tests --count --select=E9,F63,F7,F82 --show-source --statistics
+          # exit-zero treats all errors as warnings (useful for initial setup)
+          flake8 src tests --count --exit-zero --max-complexity=10 --max-line-length=100 --statistics
+
+      - name: Run tests with coverage
+        run: |
+          pytest --cov=src --cov-report=xml --cov-report=term-missing
+
+      # Uncomment if you connect to Codecov
+      # - name: Upload coverage to Codecov
+      #   uses: codecov/codecov-action@v4
+      #   with:
+      #     token: ${{ secrets.CODECOV_TOKEN }}  # only required for private repos
+      #     files: ./coverage.xml
+      #     flags: unittests
+      #     fail_ci_if_error: true
+
+      # Uncomment if you connect to Coveralls
+      # - name: Upload coverage to Coveralls
+      #   uses: coverallsapp/github-action@v2
+      #   with:
+      #     github-token: ${{ secrets.GITHUB_TOKEN }}

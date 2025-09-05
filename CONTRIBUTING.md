@@ -1,54 +1,47 @@
-🤝 Contributing to Sundew
+# 🤝 Contributing to Sundew
 
-Thank you for your interest in contributing to the Sundew Algorithm project!
-This repo explores bio-inspired, event-driven intelligence with adaptive thresholds and energy-aware gating.
+Thanks for your interest in improving **Sundew** — a bio-inspired, event-driven AI framework.
 
-📋 How to Contribute
-1. Clone & Setup
-git clone https://github.com/<your-username>/sundew.git
-cd sundew
+Repo: <https://github.com/oluwafemidiakhoa/sundew_algo>
+
+---
+
+## 📦 Setup
+
+```bat
+git clone https://github.com/oluwafemidiakhoa/sundew_algo
+cd sundew_algo
 python -m venv .venv
-.venv\Scripts\activate   # Windows
-# or source .venv/bin/activate on Linux/Mac
-
+.\.venv\Scripts\activate
+python -m pip install -U pip
 python -m pip install -e .
+Run a quick demo:
 
-2. Run Demos
-# Basic demo
-python -m sundew.cli --demo
+bat
+Copy code
+python -m sundew.cli --demo --events 40 --temperature 0.1
+🔬 Benchmarks
+Single-run (time-series visual + CSV)
+bat
+Copy code
+python benchmarks\plot_single_run.py --preset tuned_v2 --events 400 ^
+  --out results\plots_tuned ^
+  --savecsv results\runs_tuned\single_run_tuned_v2.csv
+Multi-preset sweep (combined CSV)
+bat
+Copy code
+python benchmarks\run_presets.py --events 300 --repeats 3 ^
+  --presets baseline tuned_v2 aggressive energy_saver ^
+  --out results\grid_multi.csv --logdir results\runs_multi
 
-# With custom events
-python -m sundew.cli --events 100 --temperature 0.1
+python benchmarks\plot_grid.py --csv results\grid_multi.csv --out results\plots_multi
+Artifacts land under results/.
 
-🔬 Running Benchmarks
-Grid Search (multi-preset sweeps)
-python benchmarks/grid_search.py --events 300 --repeats 3 --out results/grid.csv --logdir results/runs
-python benchmarks/plot_grid.py --csv results/grid.csv --out results/plots
+⚙️ Add a Config Preset
+Edit src/sundew/config_presets.py:
 
-
-This produces:
-
-results/grid.csv (raw data)
-
-Plots in results/plots/
-
-Single Run (deep dive)
-python benchmarks/plot_single_run.py --preset tuned_v2 --events 400 \
-  --out results/plots_tuned --savecsv results/runs_tuned/single_run_tuned_v2.csv
-
-
-This produces:
-
-Per-event CSV
-
-Plots of threshold adaptation, energy, and activations
-
-⚙️ Adding New Presets
-
-Presets live in src/sundew/config_presets.py.
-
-Example:
-
+python
+Copy code
 "my_experiment": SundewConfig(
     activation_threshold=0.65,
     target_activation_rate=0.20,
@@ -56,66 +49,44 @@ Example:
     adapt_ki=0.02,
     error_deadband=0.005,
     energy_pressure=0.03,
-)
+),
+Test it:
 
+bat
+Copy code
+python benchmarks\plot_single_run.py --preset my_experiment --events 300 --out results\plots_mine
+🧪 Tests
+bat
+Copy code
+python -m pip install -r requirements-dev.txt  # if present
+pytest -q
+🧹 Style
+PEP 8; type hints where practical.
 
-After adding, you can run:
+Keep control logic small & well-commented.
 
-python benchmarks/plot_single_run.py --preset my_experiment --events 300 --out results/plots_mine
+Prefer deterministic RNG paths for benchmarks (rng_seed).
 
-🧪 Writing Tests
+🚀 Pull Requests
+Create a feature branch:
 
-Tests go under tests/. Use pytest:
+bat
+Copy code
+git checkout -b feature/<short-name>
+Add tests/plots if relevant.
 
-pytest -v
+Update results/README.md if you add new figures.
 
-🖼️ Results Documentation
+Open a PR with a clear description and sample outputs.
 
-Every run produces:
+💡 Ideas
+Additional presets (ultra-low-power IoT / high-urgency ops).
 
-CSVs under results/runs*/
+Alternative controllers (PID variants, energy-budget MPC).
 
-Plots under results/plots*/
+Real-world datasets & adapters.
 
-See results/README.md
- for interpretation tips.
+Visualization polish / dashboards.
 
-📜 Code Style
-
-Follow PEP 8 (run flake8).
-
-Keep functions small and interpretable.
-
-Use docstrings to explain algorithms, not just parameters.
-
-🚀 Submitting Pull Requests
-
-Fork the repo & create a branch:
-
-git checkout -b feature/my-improvement
-
-
-Commit with clear messages.
-
-Run tests and benchmarks.
-
-Submit a Pull Request with:
-
-What you changed
-
-Why it matters
-
-Any plots or metrics from your experiments
-
-💡 Ideas for Contributions
-
-New presets for different environments (e.g., ultra-low energy IoT, high-urgency monitoring).
-
-Improved visualizations (interactive dashboards, seaborn styling).
-
-Extensions: multi-tier gating, spiking neural network integration, real sensor datasets.
-
-🙏 Acknowledgements
-
-Inspired by the sundew plant’s selective activation strategy.
-This repo is for research & educational purposes
+🙏 Citation
+If this helps your work, please cite using CITATION.cff or the GitHub “Cite this repository” button
