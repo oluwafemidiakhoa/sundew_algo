@@ -87,7 +87,7 @@ Savings% = 100(1 - Actual/Baseline)
 **Configuration Presets:** sundew.config_presets.get_preset(name, overrides=...)
 
 ### Figure 1 — System Architecture Overview
-![System Overview](results/plots/diagram_overview.png)
+![System Overview](assets/diagram_overview.png)
 
 ## 5. Configuration Presets
 
