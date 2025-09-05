@@ -5,11 +5,65 @@
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
+<p align="center">
+  <a href="results/plots/best_tradeoffs.png">
+    <img alt="ECG MIT-BIH Best Trade-off Plot" src="https://img.shields.io/badge/ECG%20MIT--BIH-best%20trade--off-6C63FF?logo=heartbeat&logoColor=white">
+  </a>
+  <a href="results/updates/2025-09-ecg-mitbih.md">
+    <img alt="Research Update" src="https://img.shields.io/badge/Research%20Update-2025--09-success?logo=readthedocs&logoColor=white">
+  </a>
+  <a href="#-presets">
+    <img alt="Preset: ecg_mitbih_best" src="https://img.shields.io/badge/Preset-ecg__mitbih__best-00b894?logo=python&logoColor=white">
+  </a>
+</p>
+
+> ### ⭐ Featured Preset: `ecg_mitbih_best`
+> **Frozen from MIT-BIH sweep** for a practical precision–recall–savings trade-off.  
+> - `activation_threshold = 0.65` · `gate_temperature = 0.15` · `target_activation_rate = 0.10` · `refractory = 0`  
+> - See **plot**: [best_tradeoffs.png](results/plots/best_tradeoffs.png)  
+> - See **notes & settings**: [2025-09 ECG MIT-BIH Update](results/updates/2025-09-ecg-mitbih.md)
+
+#### Quick start (ECG best)
+```bash
+python -m benchmarks.run_ecg \
+  --csv "data/MIT-BIH Arrhythmia Database.csv" \
+  --preset ecg_mitbih_best \
+  --limit 50000 \
+  --save results/real_ecg_best.json
+```
+
 > *"Nature's wisdom, encoded in silicon."*
 
 A bio-inspired, event-driven intelligence system designed for resource-constrained AI applications. Sundew implements adaptive selective activation to optimize energy consumption while maintaining processing quality on edge devices.
 
 ## Overview
+
+### ✅ Real-Dataset Validation (MIT-BIH Arrhythmia)
+
+We evaluated **Sundew** on the **MIT-BIH Arrhythmia Database** (PhysioNet; ~50k rows; binary abnormal-beat labels) using preset **`ecg_v1`** and a 108-point grid sweep over threshold/temperature/targets.
+
+- **Energy savings (median across sweep):** ~90.8% (min 90.18%, max 91.31%)
+- **Top configuration selection:** constrained by savings ≥ 88%, FN ≤ 9000, FP-rate ≤ 0.08; ranked by **F1, then precision**
+- Artifacts:
+  - CSV: [`results/best_by_counts.csv`](results/best_by_counts.csv)
+  - Markdown: [`results/best_by_counts.md`](results/best_by_counts.md)
+  - Research note: [`results/updates/2025-09-ecg-mitbih.md`](results/updates/2025-09-ecg-mitbih.md)
+
+> Reproduce:
+> ```bash
+> python -m benchmarks.sweep_ecg --csv "data/MIT-BIH Arrhythmia Database.csv" \
+>   --out results/sweep_cm.csv --preset ecg_v1 --limit 50000
+>
+> python -m benchmarks.select_best \
+>   --csv results/sweep_cm.csv \
+>   --out-csv results/best_by_counts.csv \
+>   --out-md results/best_by_counts.md \
+>   --research-md results/updates/2025-09-ecg-mitbih.md \
+>   --dataset-name "MIT-BIH Arrhythmia Database" \
+>   --dataset-notes "CSV from PhysioNet; ~50k rows; binary abnormal-beat labels; ecg_v1 sweep." \
+>   --min-savings 88 --max-fn 9000 --max-fp-rate 0.08 \
+>   --sort f1,precision --top-n 20 --describe
+> ```
 
 The Sundew Algorithm addresses a critical challenge in edge AI: **when to process events** in energy-constrained environments. Instead of processing every input, Sundew intelligently selects which events deserve computational attention based on their significance and available energy resources.
 
@@ -245,5 +299,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - ORCID: [0009-0008-7911-1171](https://orcid.org/0009-0008-7911-1171)
 
 ---
+![Best trade-offs (F1 vs Energy Savings)](results/plots/best_tradeoffs.png)
 
 *Inspired by nature, engineered for efficiency*
