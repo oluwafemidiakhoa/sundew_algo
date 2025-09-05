@@ -4,8 +4,7 @@ import argparse
 import json
 import sys
 from typing import Any, Dict
-
-from .config_presets import list_presets, get_preset
+from sundew.config_presets import list_presets, get_preset
 from .config import SundewConfig
 
 
