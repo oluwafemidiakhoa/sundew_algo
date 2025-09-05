@@ -1,0 +1,26 @@
+# CITATION.cff
+cff-version: 1.2.0
+message: "If you use the Sundew Algorithm in your work, please cite it as below."
+title: "Sundew Algorithm: Bio-Inspired Event-Driven Intelligence"
+authors:
+  - family-names: "Idiakhoa"
+    given-names: "Oluwafemi"
+    email: "ethagagroalliedltd@gmail.com"
+    affiliation: "Idiakhoas"
+abstract: >
+  The Sundew Algorithm is a bio-inspired, event-driven AI framework designed
+  for resource-constrained systems. Inspired by the sundew plant’s selective
+  activation strategy, it introduces adaptive thresholds, energy-aware gating,
+  and lightweight significance evaluation to achieve efficient, selective
+  processing. This repository provides code, benchmarks, and analysis tools.
+version: "0.1.1"
+date-released: 2025-09-01
+license: "MIT"
+repository-code: "https://github.com/oluwafemidiakhoa/sundew_algo"
+doi: "10.5281/zenodo.XXXXXXX"  # (optional) replace after archiving on Zenodo
+keywords:
+  - bio-inspired AI
+  - event-driven intelligence
+  - energy-efficient AI
+  - adaptive thresholds
+  - selective activation
