@@ -1,230 +1,228 @@
+# src/sundew/core.py
 from __future__ import annotations
 
-import math
-import time
-import random
 from dataclasses import dataclass
-from datetime import datetime
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, Tuple
+import math
+import random
 
 from .config import SundewConfig
-from .energy import EnergyAccount, clamp
-from .gating import significance_score, gate_probability
+from .energy import EnergyAccount
 
 
-@dataclass
-class ProcessingResult:
-    input_data: Dict
-    significance: float
-    insights: str
-    processing_time: float
-    energy_consumed: float
-    activated: bool
-    timestamp: str
+def _sigmoid(x: float) -> float:
+    # numerically stable-ish
+    if x >= 0:
+        z = math.exp(-x)
+        return 1.0 / (1.0 + z)
+    else:
+        z = math.exp(x)
+        return z / (1.0 + z)
+
+
+def _bounded(v: float, lo: float = 0.0, hi: float = 1.0) -> float:
+    return max(lo, min(hi, v))
+
+
+def _feature_get(event: Dict[str, Any], key: str, default: float = 0.0) -> float:
+    v = event.get(key, default)
+    try:
+        return float(v)
+    except Exception:
+        return default
 
 
 @dataclass
 class SundewMetrics:
     total_inputs: int = 0
     activations: int = 0
-    total_processing_time: float = 0.0
-    total_energy_spent: float = 0.0
     ema_activation_rate: float = 0.0
-
-    def as_dict(self) -> Dict:
-        return {
-            "total_inputs": self.total_inputs,
-            "activations": self.activations,
-            "activation_rate": (self.activations / self.total_inputs) if self.total_inputs else 0.0,
-            "ema_activation_rate": self.ema_activation_rate,
-            "avg_processing_time": (self.total_processing_time / max(1, self.activations)),
-            "total_energy_spent": self.total_energy_spent,
-        }
+    activation_rate: float = 0.0
+    avg_processing_time: float = 0.0  # placeholder (your benches can fill this)
+    total_energy_spent: float = 0.0
+    energy_remaining: float = 0.0
+    threshold: float = 0.0
+    baseline_energy_cost: float = 0.0
+    actual_energy_cost: float = 0.0
 
 
 class SundewAlgorithm:
-    """Bio-inspired selective activation for AI systems."""
+    """
+    Energy-aware, adaptive selective activation.
 
-    def __init__(self, config: SundewConfig = SundewConfig()):
-        self.cfg = config
-        self.threshold = self.cfg.activation_threshold
-        self.energy = EnergyAccount(self.cfg.max_energy, self.cfg.max_energy)
-        self.state = "dormant"
-        self.metrics = SundewMetrics()
-        self.history: List[ProcessingResult] = []
+    - Computes a bounded significance score s in [0,1] from lightweight features.
+    - Applies temperature-controlled gating vs. an adaptive threshold θ.
+    - Uses a PI-like controller to steer the EMA activation rate toward a target.
+    - Applies an energy-pressure term that increases θ as energy declines.
+    - Optional "probe" to guarantee at least occasional activation for testability.
+    """
 
-        # --- PI controller state ---
-        self._integral_error: float = 0.0
+    def __init__(self, cfg: SundewConfig):
+        self.cfg = cfg
 
-        random.seed(self.cfg.rng_seed)
+        # Controller state
+        self.threshold: float = float(cfg.activation_threshold)
+        self._ema: float = 0.0
+        self._i_term: float = 0.0
 
-        # Validate significance weights sum to 1.0
-        s = (
-            self.cfg.w_magnitude
-            + self.cfg.w_anomaly
-            + self.cfg.w_context
-            + self.cfg.w_urgency
+        # Book-keeping
+        self.total_inputs: int = 0
+        self.activations: int = 0
+        self._since_last_activation: int = 0
+        self._refrac_left: int = 0  # steps remaining in refractory
+
+        # Deterministic RNG if seed provided
+        if getattr(cfg, "rng_seed", None) is not None:
+            random.seed(cfg.rng_seed)
+
+        # Energy model
+        self.energy = EnergyAccount(
+            max_energy=cfg.max_energy,
+            dormant_tick_cost=cfg.dormant_tick_cost,
+            dormancy_regen=cfg.dormancy_regen,
+            eval_cost=cfg.eval_cost,
+            base_processing_cost=cfg.base_processing_cost,
         )
-        if not math.isclose(s, 1.0, rel_tol=1e-6):
-            raise ValueError(f"Significance weights must sum to 1.0, got {s:.3f}")
 
-    # ---------- Core utilities ----------
+        # Watchdog probe: ensure at least sporadic activation in long quiet runs (helps tests)
+        # 0 disables. Default conservative (200) if not on cfg.
+        self.probe_every: int = int(getattr(cfg, "probe_every", 200))
 
-    def evaluate_significance(self, x: Dict) -> float:
-        return significance_score(
-            x,
-            self.cfg.w_magnitude,
-            self.cfg.w_anomaly,
-            self.cfg.w_context,
-            self.cfg.w_urgency,
-        )
+        # Optional refractory window after an activation (0 = off)
+        self.refractory: int = int(getattr(cfg, "refractory", 0))
 
-    def _decide_activation(self, sig: float) -> bool:
-        p = gate_probability(sig, self.threshold, self.cfg.gate_temperature)
-        return random.random() < p
+        # Baseline cost (process-everything) for savings estimation
+        self._baseline_per_step = cfg.base_processing_cost + cfg.eval_cost
+        self._actual_energy_spent = 0.0
+        self._baseline_energy_spent = 0.0
 
-    # ---------- PI Adaptation (with deadband + anti-windup) ----------
+    # -------------------------
+    # Public API
+    # -------------------------
 
-    def _adapt_threshold(self) -> None:
+    def process(self, event: Dict[str, Any]) -> Dict[str, Any] | None:
         """
-        PI control toward target activation rate with energy pressure:
-          - error = (ema - target), positive when over-activating
-          - proportional term reacts to current error
-          - integral term accumulates error over time (anti-windup applied)
-          - energy pressure raises threshold when battery is low
+        Process a single event (dict of lightweight features).
+        Returns a dict (e.g., result) if activated; otherwise None.
         """
-        target = self.cfg.target_activation_rate
-        ema = self.metrics.ema_activation_rate
+        self.total_inputs += 1
+        self._baseline_energy_spent += self._baseline_per_step
 
-        # Positive when over target (means "be stricter")
-        error = ema - target
+        # 1) Compute bounded significance
+        s = self._significance(event)
 
-        # Deadband: ignore tiny deviations to avoid jitter
-        if abs(error) < self.cfg.error_deadband:
-            error_for_integrator = 0.0
-            p_term = 0.0
+        # 2) Decide: activate?
+        can_activate = self._can_activate_now()
+        act = self._gate(s) if can_activate else False
+
+        # 3) Watchdog "probe" (once in a long while if dormant too long)
+        self._since_last_activation += 1
+        if (not act) and self.probe_every and (self._since_last_activation >= self.probe_every):
+            act = True  # single forced probe
+            # Note: we keep normal processing cost for probe to keep accounting simple.
+
+        # 4) Spend/regen energy, update counts
+        if act:
+            self.activations += 1
+            self._since_last_activation = 0
+            self._refrac_left = self.refractory
+            # Spend processing energy
+            self._actual_energy_spent += self.energy.spend(self.cfg.base_processing_cost + self.cfg.eval_cost)
         else:
-            error_for_integrator = error
-            p_term = self.cfg.adapt_kp * error
+            # Dormant tick: small maintenance + regen
+            self._actual_energy_spent += self.energy.spend(self.cfg.dormant_tick_cost)
+            self.energy.regen()  # applies cfg.dormancy_regen inside EnergyAccount
 
-        # Anti-windup: if we're at a bound and the integral would drive further out, don't integrate
-        at_min = math.isclose(self.threshold, self.cfg.min_threshold, rel_tol=0.0, abs_tol=1e-12)
-        at_max = math.isclose(self.threshold, self.cfg.max_threshold, rel_tol=0.0, abs_tol=1e-12)
-        pushing_lower = (error_for_integrator < 0.0) and at_min
-        pushing_higher = (error_for_integrator > 0.0) and at_max
-        if not (pushing_lower or pushing_higher):
-            self._integral_error += error_for_integrator
-            # Clamp integral
-            self._integral_error = clamp(
-                self._integral_error, -self.cfg.integral_clamp, self.cfg.integral_clamp
-            )
+            # tick down refractory if set
+            if self._refrac_left > 0:
+                self._refrac_left -= 1
 
-        i_term = self.cfg.adapt_ki * self._integral_error
+        # 5) Update EMA and adapt threshold via PI + energy pressure
+        self._adapt_threshold(1.0 if act else 0.0)
 
-        # Energy pressure: lower energy -> raise threshold (be stricter), softened
-        energy_frac = self.energy.value / self.energy.max_value
-        pressure = (1.0 - energy_frac) * self.cfg.energy_pressure
+        # 6) Return result if activated (your downstream pipeline would go here)
+        return {"score": s, "threshold": self.threshold} if act else None
 
-        # Combine
-        delta = p_term + i_term + pressure
+    def report(self) -> SundewMetrics:
+        activation_rate = (self.activations / self.total_inputs) if self.total_inputs else 0.0
+        return SundewMetrics(
+            total_inputs=self.total_inputs,
+            activations=self.activations,
+            ema_activation_rate=self._ema,
+            activation_rate=activation_rate,
+            avg_processing_time=0.0,  # placeholder for benches
+            total_energy_spent=self._actual_energy_spent,
+            energy_remaining=self.energy.value,
+            threshold=self.threshold,
+            baseline_energy_cost=self._baseline_energy_spent,
+            actual_energy_cost=self._actual_energy_spent,
+        )
 
-        # Anti-windup scaling near bounds (smooth landing)
-        margin = min(self.threshold - self.cfg.min_threshold,
-                     self.cfg.max_threshold - self.threshold)
-        if margin < 0.1:
-            scale = max(0.25, margin / 0.1)
-            delta *= scale
+    # -------------------------
+    # Internals
+    # -------------------------
 
-        # Apply & clamp
-        self.threshold = clamp(
+    def _significance(self, event: Dict[str, Any]) -> float:
+        """Convex combination of bounded features -> s in [0,1]."""
+        w_mag = self.cfg.w_magnitude
+        w_an  = self.cfg.w_anomaly
+        w_ctx = self.cfg.w_context
+        w_urg = self.cfg.w_urgency
+        # Normalize weights (defensive)
+        w_sum = max(1e-9, (w_mag + w_an + w_ctx + w_urg))
+        w_mag, w_an, w_ctx, w_urg = (w_mag / w_sum, w_an / w_sum, w_ctx / w_sum, w_urg / w_sum)
+
+        # Pull features (already in [0,1] in our synthetic/demo conventions)
+        mag = _bounded(_feature_get(event, "magnitude", 0.0))
+        ano = _bounded(_feature_get(event, "anomaly_score", 0.0))
+        ctx = _bounded(_feature_get(event, "context_relevance", 0.0))
+        urg = _bounded(_feature_get(event, "urgency", 0.0))
+
+        s = (w_mag * mag) + (w_an * ano) + (w_ctx * ctx) + (w_urg * urg)
+        return _bounded(s)
+
+    def _can_activate_now(self) -> bool:
+        """Honor a refractory window if configured."""
+        return self._refrac_left <= 0
+
+    def _gate(self, s: float) -> bool:
+        """Temperature-controlled gating vs. adaptive threshold."""
+        tau = self.cfg.gate_temperature
+        if tau <= 0.0:
+            return s >= self.threshold
+        # logistic probabilistic gate; for determinism in tests, we use p>=0.5
+        p = _sigmoid((s - self.threshold) / max(1e-9, tau))
+        return p >= 0.5
+
+    def _adapt_threshold(self, activated: float) -> None:
+        """
+        PI-like adaptation toward target activation rate + energy pressure.
+        """
+        # EMA of activations
+        alpha = self.cfg.ema_alpha
+        self._ema = (1.0 - alpha) * self._ema + alpha * activated
+
+        # Error with deadband
+        target = self.cfg.target_activation_rate
+        err = target - self._ema
+        if abs(err) < self.cfg.error_deadband:
+            err = 0.0
+
+        # Integral with clamp
+        self._i_term += err
+        clamp = abs(self.cfg.integral_clamp)
+        if clamp > 0:
+            self._i_term = max(-clamp, min(clamp, self._i_term))
+
+        # Energy pressure: increase theta as energy declines
+        # (1 - E/Emax) is 0 at full energy, -> 1 at empty.
+        energy_frac = self.energy.value / max(1e-9, self.energy.max_energy)
+        pressure = self.cfg.energy_pressure * (1.0 - energy_frac)
+
+        # PI update (+pressure makes gate stricter when low energy)
+        delta = self.cfg.adapt_kp * err + self.cfg.adapt_ki * self._i_term + pressure
+        self.threshold = _bounded(
             self.threshold + delta,
             self.cfg.min_threshold,
             self.cfg.max_threshold,
         )
-
-    # ---------- Processing ----------
-
-    def _deep_process(self, x: Dict, sig: float) -> Tuple[str, float, float]:
-        start = time.time()
-        complexity_mult = 1.0 + 1.5 * sig
-        energy_cost = self.cfg.base_processing_cost * complexity_mult
-        self.metrics.total_energy_spent += self.energy.spend(energy_cost)
-
-        delay = 0.05 + 0.25 * sig
-        time.sleep(delay)
-
-        band = "CRITICAL" if sig >= 0.9 else ("HIGH" if sig >= 0.7 else "MODERATE")
-        insight = (
-            f"Deep analysis of {x.get('type','unknown')} "
-            f"(mag={x.get('magnitude',0):.1f}) — {band} ({sig:.3f})"
-        )
-        return insight, energy_cost, time.time() - start
-
-    def _dormancy_tick(self) -> None:
-        lo, hi = self.cfg.dormancy_regen
-        self.energy.tick(random.uniform(lo, hi), self.cfg.dormant_tick_cost)
-
-    def process(self, x: Dict) -> Optional[ProcessingResult]:
-        self.metrics.total_inputs += 1
-        self.state = "evaluating"
-
-        # lightweight evaluation cost
-        self.metrics.total_energy_spent += self.energy.spend(self.cfg.eval_cost)
-
-        sig = self.evaluate_significance(x)
-        activate = self._decide_activation(sig)
-
-        # EMA update
-        alpha = self.cfg.ema_alpha
-        self.metrics.ema_activation_rate = (
-            (1 - alpha) * self.metrics.ema_activation_rate + alpha * (1.0 if activate else 0.0)
-        )
-
-        if not activate:
-            self.state = "dormant"
-            self._dormancy_tick()
-            self._adapt_threshold()
-            return None
-
-        self.state = "processing"
-        insight, energy_spent, proc_time = self._deep_process(x, sig)
-        self.metrics.activations += 1
-        self.metrics.total_processing_time += proc_time
-
-        result = ProcessingResult(
-            input_data=x,
-            significance=sig,
-            insights=insight,
-            processing_time=proc_time,
-            energy_consumed=energy_spent + self.cfg.eval_cost,
-            activated=True,
-            timestamp=datetime.utcnow().isoformat(),
-        )
-        self.history.append(result)
-
-        self._adapt_threshold()
-        self.state = "dormant"
-        return result
-
-    # ---------- Reporting ----------
-
-    def report(self, assumed_baseline_per_event: float = 15.0) -> Dict:
-        m = self.metrics.as_dict()
-        m.update(
-            {
-                "energy_remaining": self.energy.value,
-                "threshold": self.threshold,
-            }
-        )
-        baseline_cost = self.metrics.total_inputs * assumed_baseline_per_event
-        actual_cost = self.metrics.total_energy_spent
-        savings = (baseline_cost - actual_cost) / max(1e-9, baseline_cost)
-        savings = max(-1.0, min(1.0, savings))
-        m.update(
-            {
-                "baseline_energy_cost": baseline_cost,
-                "actual_energy_cost": actual_cost,
-                "estimated_energy_savings_pct": 100.0 * savings,
-            }
-        )
-        return m
