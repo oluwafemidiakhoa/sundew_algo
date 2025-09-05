@@ -1,0 +1,53 @@
+{
+  "config": {
+    "activation_threshold": 0.6,
+    "target_activation_rate": 0.12,
+    "ema_alpha": 0.08,
+    "adapt_kp": 0.09,
+    "adapt_ki": 0.02,
+    "error_deadband": 0.005,
+    "integral_clamp": 0.5,
+    "adapt_lr": 0.02,
+    "min_threshold": 0.45,
+    "max_threshold": 0.95,
+    "energy_pressure": 0.08,
+    "gate_temperature": 0.12,
+    "max_energy": 100.0,
+    "dormant_tick_cost": 0.5,
+    "dormancy_regen": [
+      1.0,
+      3.0
+    ],
+    "eval_cost": 0.6,
+    "base_processing_cost": 10.0,
+    "w_magnitude": 0.2,
+    "w_anomaly": 0.5,
+    "w_context": 0.2,
+    "w_urgency": 0.1,
+    "rng_seed": 42
+  },
+  "report": {
+    "total_inputs": 4800,
+    "activations": 226,
+    "activation_rate": 0.04708333333333333,
+    "ema_activation_rate": 0.08310490646753439,
+    "avg_processing_time": 0.17400863001831865,
+    "total_energy_spent": 6704.955840105575,
+    "energy_remaining": 54.96835847911211,
+    "threshold": 0.95,
+    "baseline_energy_cost": 72000.0,
+    "actual_energy_cost": 6704.955840105575,
+    "estimated_energy_savings_pct": 90.6875613331867
+  },
+  "counts": {
+    "tp": 30,
+    "fp": 196,
+    "fn": 5123,
+    "tn": 44651,
+    "precision": 0.13274336283185842,
+    "recall": 0.005821851348728896,
+    "f1": 0.011154489682097044,
+    "total_inputs": 50000,
+    "activations": 226
+  }
+}
