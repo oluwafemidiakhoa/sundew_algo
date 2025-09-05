@@ -19,17 +19,29 @@ keywords = [
   "adaptive-threshold", "edge-ai", "gating", "control"
 ]
 
-# Core package: no hard runtime deps (pure stdlib).
+# ✅ Correct: classifiers must be an array of strings
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Science/Research",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.8",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11"
+]
+
+# Core package has no hard runtime deps.
 dependencies = []
 
-# Optional extras for local dev and experiments.
 [project.optional-dependencies]
 benchmarks = [
-  "numpy>=1.23,<2.0",      # plotting & analysis helpers
+  "numpy>=1.23,<2.0",
   "matplotlib>=3.3",
 ]
 dev = [
-  "numpy>=1.23,<2.0",      # required by tests (imports np)
+  "numpy>=1.23,<2.0",      # tests import numpy
   "pytest>=8.0",
   "pytest-cov>=4.0",
   "flake8>=6.0",
@@ -42,11 +54,9 @@ Issues     = "https://github.com/oluwafemidiakhoa/sundew_algo/issues"
 "CI Actions" = "https://github.com/oluwafemidiakhoa/sundew_algo/actions"
 
 [project.scripts]
-# Convenient CLI: `sundew --demo ...`
 sundew = "sundew.cli:main"
 
 [tool.setuptools]
-# src/ layout
 package-dir = { "" = "src" }
 
 [tool.setuptools.packages.find]
@@ -54,14 +64,8 @@ where = ["src"]
 include = ["sundew*"]
 exclude = ["tests*"]
 
-# -------------------------
-# Testing & Linting Configs
-# -------------------------
-
 [tool.pytest.ini_options]
-# Make it easy to run `pytest` from repo root
 testpaths = ["tests"]
-# Coverage target can be tuned; raise as the project matures
 addopts = "--cov=src --cov-report=term-missing --cov-fail-under=80 -q"
 
 [tool.coverage.run]
@@ -76,21 +80,5 @@ precision = 1
 
 [tool.flake8]
 max-line-length = 100
-extend-ignore = [
-  "E203",  # whitespace before ':', often conflicts with black/isort styles
-]
-per-file-ignores = [
-  "tests/*: D",
-]
-
-# Optional: metadata classifiers (helps discovery on PyPI if you publish)
-[project.classifiers]
-# Development Status :: 3 - Alpha
-# Intended Audience :: Science/Research
-# Topic :: Scientific/Engineering :: Artificial Intelligence
-# License :: OSI Approved :: MIT License
-# Programming Language :: Python :: 3
-# Programming Language :: Python :: 3.8
-# Programming Language :: Python :: 3.9
-# Programming Language :: Python :: 3.10
-# Programming Language :: Python :: 3.11
+extend-ignore = ["E203"]
+per-file-ignores = ["tests/*: D"]
