@@ -4,7 +4,7 @@
 **Affiliation:** Independent Research  
 **Contact:** oluwafemidiakhoa@gmail.com  
 **ORCID:** 0009-0008-7911-1171  
-**Repository:** github.com/oluwafemidiakhoa/sundew  
+**Repository:** https://github.com/oluwafemidiakhoa/sundew_algorithms
 **License:** MIT
 
 *"Nature's wisdom, engineered for efficiency."*
