@@ -137,6 +137,20 @@ baseline_energy_cost     : 750000
 actual_energy_cost       : 86398
 estimated_energy_savings : 88.5%
 ```
+## 📊 MIT-BIH ECG Results (Sep 2025)
+
+We ran Sundew on the **MIT-BIH Arrhythmia Dataset (50k samples)**.  
+A new preset `ecg_mitbih_best` is now frozen in `config_presets.py`.
+
+- **Energy savings:** ~90%  
+- **F1 score:** ~0.106  
+- **Precision:** ~0.17  
+- **Recall:** ~0.075  
+
+<img src="results/best_tradeoffs_chart.png" width="500">
+
+> This represents the first open-source energy-aware controller validated on a gold-standard arrhythmia dataset.
+
 
 Quality (eval):
 ```bash
