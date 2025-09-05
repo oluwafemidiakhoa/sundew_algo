@@ -1,3 +1,4 @@
+# src/sundew/config_presets.py
 """
 Named configuration presets for Sundew.
 
@@ -15,17 +16,21 @@ print(list_presets())
 """
 
 from __future__ import annotations
-from typing import Dict, Any, Callable
+
 from dataclasses import replace
+from typing import Any, Callable, Dict
 
 from .config import SundewConfig
 
 
-# ---------- Baseline (former numbers) ----------
+# ------------------------------------------------------------------------------#
+# Baseline (former numbers)
+# ------------------------------------------------------------------------------#
+
 def _baseline() -> SundewConfig:
     """
-    Former defaults used earlier in the project and in your first plots.
-    Good to reproduce the "conservative / under-activating" behavior.
+    Former defaults used earlier in the project and in the first plots.
+    Conservative and prone to under-activation (maximizes savings).
     """
     return SundewConfig(
         # Activation & adaptation
@@ -33,22 +38,22 @@ def _baseline() -> SundewConfig:
         target_activation_rate=0.25,
         ema_alpha=0.10,
 
-        # Controller (former)
+        # Controller (initial PI-style numbers kept for reproducibility)
         adapt_kp=0.06,
         adapt_ki=0.01,
         error_deadband=0.010,
         integral_clamp=0.50,
-        adapt_lr=0.02,  # legacy (unused in PI but kept)
+        adapt_lr=0.02,  # legacy (not used when PI is active, but preserved)
 
-        # Threshold bounds (former)
+        # Threshold bounds
         min_threshold=0.30,
         max_threshold=0.95,
 
-        # Energy pressure (former strong)
+        # Energy pressure (stronger -> more conservative)
         energy_pressure=0.15,
 
-        # Gating (harder by default)
-        gate_temperature=0.00,
+        # Gating
+        gate_temperature=0.00,  # hard
 
         # Energy model
         max_energy=100.0,
@@ -57,17 +62,23 @@ def _baseline() -> SundewConfig:
         eval_cost=0.6,
         base_processing_cost=10.0,
 
-        # Weights
+        # Significance weights
         w_magnitude=0.30,
         w_anomaly=0.40,
         w_context=0.20,
         w_urgency=0.10,
 
+        # Extras
         rng_seed=42,
+        probe_every=200,
+        refractory=0,
     )
 
 
-# ---------- Tuned v1 (intermediate, PI + softer pressure) ----------
+# ------------------------------------------------------------------------------#
+# Tuned v1 (PI + softer pressure)
+# ------------------------------------------------------------------------------#
+
 def _tuned_v1() -> SundewConfig:
     """
     First PI iteration that reduced threshold pegging and improved activation rate.
@@ -86,7 +97,7 @@ def _tuned_v1() -> SundewConfig:
         max_threshold=0.90,
 
         energy_pressure=0.05,   # softer than baseline
-        gate_temperature=0.10,  # a little softness helps hit target
+        gate_temperature=0.10,  # soft-ish
 
         max_energy=100.0,
         dormant_tick_cost=0.5,
@@ -100,31 +111,36 @@ def _tuned_v1() -> SundewConfig:
         w_urgency=0.10,
 
         rng_seed=42,
+        probe_every=200,
+        refractory=0,
     )
 
 
-# ---------- Tuned v2 (current recommended defaults from your latest plots) ----------
+# ------------------------------------------------------------------------------#
+# Tuned v2 (current recommended general-use defaults)
+# ------------------------------------------------------------------------------#
+
 def _tuned_v2() -> SundewConfig:
     """
-    Current recommended settings from your latest experiments:
-    - higher gains, smaller deadband
+    Recommended general-purpose settings (from your latest experiments):
+    - slightly higher gains, smaller deadband
     - softer energy pressure
-    - tighter max_threshold
+    - tighter max_threshold to avoid hard-pegging
     """
     return SundewConfig(
         activation_threshold=0.70,
         target_activation_rate=0.25,
         ema_alpha=0.10,
 
-        adapt_kp=0.08,          # ↑ from 0.06
-        adapt_ki=0.02,          # ↑ from 0.01
-        error_deadband=0.005,   # ↓ from 0.01
+        adapt_kp=0.08,          # up from 0.06
+        adapt_ki=0.02,          # up from 0.01
+        error_deadband=0.005,   # down from 0.01
         integral_clamp=0.50,
 
-        min_threshold=0.20,     # ↓ from 0.30
-        max_threshold=0.90,     # ↓ from 0.95
+        min_threshold=0.20,     # down from 0.30
+        max_threshold=0.90,     # down from 0.95
 
-        energy_pressure=0.03,   # ↓ from 0.05
+        energy_pressure=0.03,   # softer conservation pressure
         gate_temperature=0.10,
 
         max_energy=100.0,
@@ -139,24 +155,118 @@ def _tuned_v2() -> SundewConfig:
         w_urgency=0.10,
 
         rng_seed=42,
+        probe_every=200,
+        refractory=0,
     )
 
 
-# ---------- Aggressive (hit target faster, more activations; less savings) ----------
+# ------------------------------------------------------------------------------#
+# ECG-focused preset (improve recall on arrhythmias)
+# ------------------------------------------------------------------------------#
+
+def _ecg_v1() -> SundewConfig:
+    """
+    ECG-oriented trade-off:
+    - Lower starting threshold and slightly softer gate to raise recall
+    - Slightly faster controller
+    - Bias significance toward anomaly/context (ECG morphology deviations)
+    """
+    return SundewConfig(
+        activation_threshold=0.60,
+        target_activation_rate=0.12,   # allow more duty than generic tuned_v2
+        ema_alpha=0.08,
+
+        adapt_kp=0.09,
+        adapt_ki=0.02,
+        error_deadband=0.005,
+        integral_clamp=0.50,
+
+        min_threshold=0.45,
+        max_threshold=0.95,
+
+        energy_pressure=0.08,       # don’t clamp too early in low energy
+        gate_temperature=0.12,      # admit borderline beats
+
+        max_energy=100.0,
+        dormant_tick_cost=0.5,
+        dormancy_regen=(1.0, 3.0),
+        eval_cost=0.6,
+        base_processing_cost=10.0,
+
+        w_magnitude=0.20,
+        w_anomaly=0.50,
+        w_context=0.20,
+        w_urgency=0.10,
+
+        rng_seed=42,
+        probe_every=200,
+        refractory=0,
+    )
+
+
+# ------------------------------------------------------------------------------#
+# Frozen best trade-off from your MIT-BIH sweep
+# ------------------------------------------------------------------------------#
+
+def _ecg_mitbih_best() -> SundewConfig:
+    """
+    Frozen trade-off from MIT-BIH sweep:
+    - modest starting threshold
+    - slightly soft gate to admit borderline beats
+    - a bit more duty (target ~0.14) to lift recall
+    """
+    return SundewConfig(
+        activation_threshold=0.65,
+        target_activation_rate=0.14,
+        ema_alpha=0.08,
+
+        adapt_kp=0.09,
+        adapt_ki=0.02,
+        error_deadband=0.005,
+        integral_clamp=0.50,
+
+        min_threshold=0.45,
+        max_threshold=0.90,
+
+        energy_pressure=0.07,
+        gate_temperature=0.14,
+
+        max_energy=100.0,
+        dormant_tick_cost=0.5,
+        dormancy_regen=(1.0, 3.0),
+        eval_cost=0.6,
+        base_processing_cost=10.0,
+
+        w_magnitude=0.20,
+        w_anomaly=0.50,
+        w_context=0.20,
+        w_urgency=0.10,
+
+        rng_seed=42,
+        probe_every=200,
+        refractory=0,
+    )
+
+
+# ------------------------------------------------------------------------------#
+# Variants
+# ------------------------------------------------------------------------------#
+
 def _aggressive() -> SundewConfig:
+    """Faster to hit target; more activations; lower energy savings."""
     return replace(
         _tuned_v2(),
         adapt_kp=0.12,
         adapt_ki=0.04,
         error_deadband=0.003,
         energy_pressure=0.02,
-        gate_temperature=0.15,   # softer gate to allow borderline events
+        gate_temperature=0.15,
         max_threshold=0.88,
     )
 
 
-# ---------- Conservative (maximize savings; will under-activate if stream is quiet) ----------
 def _conservative() -> SundewConfig:
+    """Maximize savings (will under-activate in quiet streams)."""
     return replace(
         _tuned_v2(),
         adapt_kp=0.05,
@@ -169,8 +279,8 @@ def _conservative() -> SundewConfig:
     )
 
 
-# ---------- High-temperature (probe/explore more; useful for anomaly-heavy streams) ----------
 def _high_temp() -> SundewConfig:
+    """Probe/explore more (useful for anomaly-heavy streams)."""
     return replace(
         _tuned_v2(),
         gate_temperature=0.20,
@@ -178,8 +288,8 @@ def _high_temp() -> SundewConfig:
     )
 
 
-# ---------- Low-temperature (nearly hard gate; sharper selectivity) ----------
 def _low_temp() -> SundewConfig:
+    """Nearly hard gate; sharper selectivity."""
     return replace(
         _tuned_v2(),
         gate_temperature=0.00,
@@ -187,8 +297,8 @@ def _low_temp() -> SundewConfig:
     )
 
 
-# ---------- Energy saver (prioritize battery; accept lower activation) ----------
 def _energy_saver() -> SundewConfig:
+    """Prioritize battery; accept lower activation rate."""
     return replace(
         _tuned_v2(),
         energy_pressure=0.08,
@@ -199,19 +309,24 @@ def _energy_saver() -> SundewConfig:
     )
 
 
-# ---------- Higher target (e.g., 0.30) ----------
 def _target_0p30() -> SundewConfig:
+    """Convenience preset for a higher target activation rate."""
     return replace(
         _tuned_v2(),
         target_activation_rate=0.30,
     )
 
 
-# Map of preset name -> builder
+# ------------------------------------------------------------------------------#
+# Registry
+# ------------------------------------------------------------------------------#
+
 _PRESETS: Dict[str, Callable[[], SundewConfig]] = {
     "baseline": _baseline,
     "tuned_v1": _tuned_v1,
-    "tuned_v2": _tuned_v2,        # current recommended
+    "tuned_v2": _tuned_v2,        # current general recommendation
+    "ecg_v1": _ecg_v1,            # ECG-focused preset (generic)
+    "ecg_mitbih_best": _ecg_mitbih_best,  # frozen best from MIT-BIH sweep
     "aggressive": _aggressive,
     "conservative": _conservative,
     "high_temp": _high_temp,
