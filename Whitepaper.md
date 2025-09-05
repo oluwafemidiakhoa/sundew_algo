@@ -133,10 +133,10 @@ Comprehensive parameter sweeps were conducted to identify optimal trade-offs, wi
 **Additional Visualizations:**
 
 Activation Rate vs. Target Rate  
-![Activation vs Target](results/plots/experiments_1/activation_vs_target.png)
+![Activation vs Target](results/plots/experiments_2/activation_vs_target.png)
 
 Energy Savings vs. Temperature Parameter  
-![Energy vs Temperature](results/plots/experiments_1/energy_savings_vs_temp.png)
+![Energy vs Temperature](results/plots/experiments_2/energy_savings_vs_temp.png)
 
 Threshold Distribution by Preset Configuration  
 ![Threshold Hist by Preset](results/plots/experiments_3/threshold_hist_by_preset.png)
