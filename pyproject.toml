@@ -19,24 +19,26 @@ keywords = [
   "adaptive-threshold", "edge-ai", "gating", "control"
 ]
 
-# Core package has no hard runtime deps (pure stdlib).
-# Benchmarks/plots are optional extras.
+# Core package: no hard runtime deps (pure stdlib).
 dependencies = []
 
+# Optional extras for local dev and experiments.
 [project.optional-dependencies]
 benchmarks = [
+  "numpy>=1.23,<2.0",      # plotting & analysis helpers
   "matplotlib>=3.3",
 ]
 dev = [
+  "numpy>=1.23,<2.0",      # required by tests (imports np)
   "pytest>=8.0",
   "pytest-cov>=4.0",
   "flake8>=6.0",
 ]
 
 [project.urls]
-Homepage = "https://github.com/oluwafemidiakhoa/sundew_algo"
+Homepage   = "https://github.com/oluwafemidiakhoa/sundew_algo"
 Repository = "https://github.com/oluwafemidiakhoa/sundew_algo"
-Issues = "https://github.com/oluwafemidiakhoa/sundew_algo/issues"
+Issues     = "https://github.com/oluwafemidiakhoa/sundew_algo/issues"
 "CI Actions" = "https://github.com/oluwafemidiakhoa/sundew_algo/actions"
 
 [project.scripts]
@@ -65,9 +67,7 @@ addopts = "--cov=src --cov-report=term-missing --cov-fail-under=80 -q"
 [tool.coverage.run]
 branch = true
 source = ["src"]
-omit = [
-  "tests/*",
-]
+omit = ["tests/*"]
 
 [tool.coverage.report]
 show_missing = true
@@ -82,3 +82,15 @@ extend-ignore = [
 per-file-ignores = [
   "tests/*: D",
 ]
+
+# Optional: metadata classifiers (helps discovery on PyPI if you publish)
+[project.classifiers]
+# Development Status :: 3 - Alpha
+# Intended Audience :: Science/Research
+# Topic :: Scientific/Engineering :: Artificial Intelligence
+# License :: OSI Approved :: MIT License
+# Programming Language :: Python :: 3
+# Programming Language :: Python :: 3.8
+# Programming Language :: Python :: 3.9
+# Programming Language :: Python :: 3.10
+# Programming Language :: Python :: 3.11
